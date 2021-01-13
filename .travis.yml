@@ -4,7 +4,7 @@ language: shell
 
 env:
   global:
-    - CONDA_PYTHON=3.6
+    - CONDA_PYTHON=3.8
     - CONDA_BLD_PATH=${HOME}/conda-bld
 
 os:
@@ -21,6 +21,8 @@ cache:
 
 before_cache:
   # adapted from https://github.com/theochem/cgrid/blob/master/.travis.yml
+  - echo "Cleaning stuff in miniconda path. (${MINICONDA_PATH})"
+  - ls -la ${MINICONDA_PATH}
   - rm -rf ${MINICONDA_PATH}/conda-bld
   - rm -rf ${MINICONDA_PATH}/locks
   - rm -rf ${MINICONDA_PATH}/pkgs
@@ -29,7 +31,8 @@ before_cache:
   - rm -rf ${MINICONDA_PATH}/envs/*/locks
   - rm -rf ${MINICONDA_PATH}/envs/*/pkgs
   - rm -rf ${MINICONDA_PATH}/envs/*/var
-  # Clean out test results
+  - ls -la ${MINICONDA_PATH}
+  - echo "Cleaning test results"
   - rm -rf ${HOME}/cache/tests/*/faces
   - rm -rf ${HOME}/cache/tests/*/conv
   - rm -rf ${HOME}/cache/tests/*/*.json
@@ -84,10 +87,16 @@ install:
   - conda env list | grep faceswap || conda create -q --name faceswap python=$CONDA_PYTHON;
   - conda activate faceswap;
   - conda --version ; python --version ; pip --version;
-  - python setup.py --installer;
+  # We set up for plaidML as we can then use both the plaidML and Tensorflow backends for testing
+  - python setup.py --installer --amd;
+  - conda install pytest;
   # For debugging purposes
   - df -h
 
 script:
-  - python simple_tests.py;
-
+  - rm -f ~/.plaidml;
+  - echo "{\"PLAIDML_DEVICE_IDS\":[\"llvm_cpu.0\"],\"PLAIDML_EXPERIMENTAL\":true}" > ~/.plaidml;
+  - FACESWAP_BACKEND="amd" KERAS_BACKEND="plaidml.keras.backend" PYTHONPATH=$PWD:$PYTHONPATH py.test -v tests/;
+  - rm -f ~/.plaidml;
+  - FACESWAP_BACKEND="cpu" KERAS_BACKEND="tensorflow" PYTHONPATH=$PWD:$PYTHONPATH py.test -v tests/;
+  - FACESWAP_BACKEND="cpu" KERAS_BACKEND="tensorflow" python _travis/simple_tests.py;
